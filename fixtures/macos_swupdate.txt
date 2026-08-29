@@ -1,0 +1,8 @@
+Software Update Tool
+
+Finding available software
+Software Update found the following new or updated software:
+* Label: macOS Sequoia 15.6-24G84
+	Title: macOS Sequoia 15.6, Version: 15.6, Size: 3123456K, Recommended: YES, Action: restart,
+* Label: Safari18.6-18.6
+	Title: Safari, Version: 18.6, Size: 87654K, Recommended: YES, Action: restart,
