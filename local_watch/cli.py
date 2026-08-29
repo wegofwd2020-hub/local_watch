@@ -21,7 +21,6 @@ def main(argv=None) -> int:
     i = sub.add_parser("ingest"); i.add_argument("--store", required=True); i.add_argument("files", nargs="+")
     r = sub.add_parser("render"); r.add_argument("--store", required=True)
     r.add_argument("--html", required=True); r.add_argument("--md", required=True)
-    sub.add_parser("review")  # alias handled below
     a = ap.parse_args(argv)
 
     if a.cmd == "collect":
@@ -31,7 +30,7 @@ def main(argv=None) -> int:
         for fp in a.files:
             st.append(Snapshot.from_json(open(fp).read()))
         return 0
-    if a.cmd in ("render", "review"):
+    if a.cmd == "render":
         st = Store(a.store)
         snaps = [st.latest(m) for m in st.machines()]
         flags = []
