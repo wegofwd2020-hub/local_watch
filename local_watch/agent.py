@@ -17,8 +17,19 @@ def _fallback(machine: str, flags: list[Flag]) -> str:
     return "Issues to address:\n" + "\n".join(f"- [{f.severity}] {f.message}" for f in flags)
 
 def _default_provider():
-    from wegofwd_llm.registry import build_provider   # imported lazily so tests need no key
-    return build_provider(role="authoring")
+    # Imported/read lazily so importing this module + running tests never needs
+    # wegofwd-llm installed or a key on disk.
+    import os
+    from wegofwd_llm.registry import build_provider
+    from wegofwd_llm.contract import LLMRequest
+    key = open(os.path.expanduser("~/.config/wegofwd/anthropic_api_key")).read().strip()
+    real = build_provider("anthropic", api_key=key, model="claude-sonnet-4-6")
+
+    class _Adapter:
+        def complete(self, prompt: str) -> str:
+            return real.generate(LLMRequest(prompt=prompt)).text
+
+    return _Adapter()
 
 def recommend(snapshots: list[Snapshot], flags: list[Flag], provider=None) -> dict[str, str]:
     if provider is None:
