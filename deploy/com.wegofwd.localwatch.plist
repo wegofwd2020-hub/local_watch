@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.wegofwd.localwatch.plist — macOS LaunchAgent
+
+  Runs a single read-only local_watch collect pass every 20 minutes
+  (StartInterval=1200 seconds) and writes the snapshot to the local spool
+  directory. Does NOT sync anywhere on its own — see deploy/README.md.
+
+  ASSUMPTIONS (adjust before installing, see README):
+    - local_watch is installed into a Python environment reachable as
+      `local_watch` on PATH for the login user (e.g. `pip install -e .`
+      inside a venv, with the venv's bin dir referenced directly below
+      since launchd does not source shell rc files / activate venvs).
+    - Replace /Users/YOURUSER below with the actual home directory, and
+      the ExecStart-equivalent path below with wherever the venv actually
+      lives (e.g. ~/local_watch/.venv/bin/local_watch).
+    - ~/.local/share/local_watch/spool exists (created once by the
+      operator: `mkdir -p ~/.local/share/local_watch/spool`).
+
+  This file is NOT loaded/enabled automatically — copying it into
+  ~/Library/LaunchAgents and running `launchctl load` is a manual,
+  operator-run step documented in deploy/README.md.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wegofwd.localwatch</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOURUSER/local_watch/.venv/bin/local_watch</string>
+        <string>collect</string>
+        <string>--machine</string>
+        <string>%HOST%</string>
+        <string>--out</string>
+        <string>/Users/YOURUSER/.local/share/local_watch/spool/%HOST%.json</string>
+    </array>
+
+    <!-- launchd does not expand %H like systemd does; the operator must
+         replace %HOST% above with the machine's actual hostname (see
+         README "Mac" section) before loading this agent. -->
+
+    <key>StartInterval</key>
+    <integer>1200</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/Users/YOURUSER/.local/share/local_watch/collect.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/YOURUSER/.local/share/local_watch/collect.err.log</string>
+</dict>
+</plist>

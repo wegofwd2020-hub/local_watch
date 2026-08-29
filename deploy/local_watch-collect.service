@@ -1,0 +1,31 @@
+# local_watch-collect.service — systemd USER unit (Linux)
+#
+# Runs a single read-only collection pass and writes a snapshot JSON to the
+# local spool directory. This unit does NOT sync anywhere and does NOT
+# install/enable itself — see deploy/README.md for that (operator-run).
+#
+# ASSUMPTIONS (adjust to match the actual box before installing):
+#   - The local_watch repo is checked out at ~/local_watch with a venv at
+#     ~/local_watch/.venv (created via `python3 -m venv .venv && .venv/bin/pip install -e .`).
+#     If your checkout lives elsewhere, edit ExecStart/WorkingDirectory below.
+#   - The spool directory ~/.local/share/local_watch/spool exists (create it
+#     before first run: `mkdir -p ~/.local/share/local_watch/spool`).
+#   - %H expands to the machine's hostname (short form), used both as the
+#     --machine label and the output filename so each box writes its own file.
+#
+# This unit is Type=oneshot and is triggered by local_watch-collect.timer —
+# it is not meant to be started with `--now` directly (though doing so once
+# for a manual test is harmless: `collect` only reads local read-only probes).
+
+[Unit]
+Description=local_watch: collect one read-only snapshot of this machine
+Documentation=file:///%h/local_watch/deploy/README.md
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/local_watch
+ExecStart=%h/local_watch/.venv/bin/local_watch collect --machine %H --out %h/.local/share/local_watch/spool/%H.json
+
+# Defense in depth: this unit should never need network or write access
+# outside the spool dir. It does not grant elevated privileges and runs as
+# the invoking user (systemd --user units always do).

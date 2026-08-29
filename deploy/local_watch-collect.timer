@@ -1,0 +1,21 @@
+# local_watch-collect.timer — systemd USER timer (Linux)
+#
+# Fires local_watch-collect.service roughly every 20 minutes. This file only
+# defines the schedule; it is not enabled by anything in this repo. See
+# deploy/README.md for the `systemctl --user enable --now` step the operator
+# runs by hand.
+
+[Unit]
+Description=Run local_watch collect every ~20 minutes
+
+[Timer]
+# First run 2 minutes after boot/login (systemd --user units only run while
+# a user session exists, or with lingering enabled — see README).
+OnBootSec=2min
+# Then every 20 minutes after the previous run finished.
+OnUnitActiveSec=20min
+# If the machine was asleep/off when a run was due, run once on next login.
+Persistent=true
+
+[Install]
+WantedBy=timers.target
