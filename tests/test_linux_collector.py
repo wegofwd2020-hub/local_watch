@@ -21,3 +21,8 @@ def test_linux_collect_produces_snapshot():
     assert "disk_root_pct" in names and "mem_used_pct" in names
     assert "updates_pending" in snap.facts   # a count string
     assert 0.0 <= next(m.value for m in snap.metrics if m.name == "disk_root_pct") <= 100.0
+
+def test_linux_collect_parses_failed_units_and_pending_updates():
+    snap = linux.collect(runner=fake_runner, machine="testbox", now="2026-08-29T00:00:00Z")
+    assert snap.facts["failed_units"] == "nginx.service"
+    assert snap.facts["updates_pending"] == "1"
