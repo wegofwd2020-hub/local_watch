@@ -29,7 +29,8 @@ def evaluate(latest: Snapshot, series: dict[str, list[float]]) -> list[Flag]:
         f.append(Flag(mc, "mem_pressure", "warn", f"Memory {mem:.0f}% used"))
     if latest.facts.get("reboot_required") == "true":
         f.append(Flag(mc, "reboot_required", "warn", "Reboot required"))
-    up = int(latest.facts.get("updates_pending", "0") or 0)
+    _updates_raw = latest.facts.get("updates_pending", "0") or "0"
+    up = int(_updates_raw) if str(_updates_raw).isdigit() else 0
     if up > 0:
         f.append(Flag(mc, "updates_pending", "info" if up < 20 else "warn", f"{up} package updates pending"))
     failed = latest.facts.get("failed_units", "")

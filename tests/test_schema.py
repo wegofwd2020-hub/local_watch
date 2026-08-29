@@ -9,5 +9,6 @@ def test_snapshot_roundtrip():
     assert back.metrics[0].name == "disk_root_pct" and back.metrics[0].value == 87.5
 
 def test_metric_defaults_and_types():
-    m = Metric("cpu_load1", 0.4, "")
+    m = Metric("cpu_load1", 0.4)
     assert isinstance(m.value, float)
+    assert m.unit == ""

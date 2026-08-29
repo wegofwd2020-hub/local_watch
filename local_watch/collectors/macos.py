@@ -4,13 +4,20 @@ from local_watch.collectors.base import probe
 
 def _disk_root_pct(df_out: str) -> float:
     # macOS `df -P` uses the same POSIX columns as Linux (Filesystem, blocks,
-    # Used, Available, Capacity, Mounted on) with the root mount at "/", so
-    # this mirrors linux.py's `_disk_root_pct` parser exactly.
+    # Used, Available, Capacity, Mounted on), but on APFS macOS the "/" mount
+    # is the sealed read-only system snapshot (near-empty by design); real
+    # user data lives on "/System/Volumes/Data". Prefer that mount's
+    # capacity %, falling back to "/" if the Data volume row is absent.
+    root_pct = None
     for line in df_out.splitlines():
         parts = line.split()
-        if len(parts) >= 6 and parts[5] == "/":
+        if len(parts) < 6:
+            continue
+        if parts[5] == "/System/Volumes/Data":
             return float(parts[4].rstrip("%"))
-    return 0.0
+        if parts[5] == "/":
+            root_pct = float(parts[4].rstrip("%"))
+    return root_pct if root_pct is not None else 0.0
 
 def _vm_stat_pages(vm_stat_out: str) -> dict[str, int]:
     pages: dict[str, int] = {}

@@ -73,3 +73,8 @@ def test_disk_90_is_crit():
     disk_flag = next((f for f in flags if f.key == "disk_full"), None)
     assert disk_flag is not None
     assert disk_flag.severity == "crit"
+
+def test_updates_pending_non_numeric_does_not_crash():
+    """Non-numeric updates_pending fact must not raise and must not flag."""
+    flags = evaluate(snap(10.0, {"updates_pending": "unknown"}), {"disk_root_pct": [10.0]})
+    assert not any(f.key == "updates_pending" for f in flags)

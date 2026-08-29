@@ -26,7 +26,7 @@ schema) → **sync + store** (Tailscale → per-machine history on mambakkam, SQ
 `wegofwd-llm`) → **output** (fleet dashboard + report, surfaced via wegofwd-hub).
 
 ## Components & boundaries
-- `collectors/schema.py` — the snapshot contract every OS adapter emits (OS-agnostic downstream).
+- `local_watch/schema.py` — the snapshot contract every OS adapter emits (OS-agnostic downstream).
 - `collectors/linux.py`, `collectors/macos.py` — read-only probes only; no side effects.
 - `store/` — append + query metric history; pure data, no analysis.
 - `rules/` — pure functions: (history, latest) → list[Flag]. No I/O, no LLM. Unit-testable.
