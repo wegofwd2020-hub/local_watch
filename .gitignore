@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# local_watch runtime artifacts (never commit collected metrics / reports / keys)
+store/*.sqlite
+store/*.jsonl
+data/
+reports/
+*.report.md
+*.report.html
+
+# secrets / local config
+*.key
+*_key
+.env
+config.local.*
+
+# OS
+.DS_Store
+
+# internal SDD docs stay local if this ever mirrors to a public surface (it won't; private repo)
