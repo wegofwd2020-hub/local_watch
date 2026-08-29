@@ -23,7 +23,7 @@ for the SDD cycle and pins the decisions made during brainstorming.
 Four layers (see README for the diagram): **collectors** (per-OS, read-only, common snapshot
 schema) → **sync + store** (Tailscale → per-machine history on mambakkam, SQLite/JSONL) →
 **rules** (deterministic flags with severity) → **LLM agent** (recommendations via
-`wegofwd-llm`) → **output** (MD/HTML report + wegofwd-hub tile).
+`wegofwd-llm`) → **output** (fleet dashboard + report, surfaced via wegofwd-hub).
 
 ## Components & boundaries
 - `collectors/schema.py` — the snapshot contract every OS adapter emits (OS-agnostic downstream).
@@ -32,7 +32,11 @@ schema) → **sync + store** (Tailscale → per-machine history on mambakkam, SQ
 - `rules/` — pure functions: (history, latest) → list[Flag]. No I/O, no LLM. Unit-testable.
 - `agent/` — takes aggregate + flags → recommendations string(s) via `wegofwd-llm`. The only
   component that calls out; degrades to "flags only" if the LLM/key is unavailable.
-- `report/` — renders report + hub tile from (snapshots, flags, recommendations).
+- `report/` — pure render: (snapshots, flags, recommendations) → a self-contained **fleet
+  dashboard** HTML (per-machine cards: status light, key metrics, trend sparklines from
+  history, active flags, latest recommendations; fleet-summary header) + a Markdown report.
+  No external assets (inline CSS/SVG sparklines), theme-aware. Surfaced live by a
+  `wegofwd-hub` tile that reads the file fresh per view (same as portfolio.html/doc-digest).
 - `deploy/` — systemd timer units, launchd plist, Tailscale sync setup.
 
 ## Testing posture

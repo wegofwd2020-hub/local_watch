@@ -53,7 +53,7 @@ the aggregator.
  │  store        · metric history per machine (SQLite/JSONL)  │
  │  rules layer  · thresholds → deterministic flags           │
  │  LLM agent    · reviews aggregate+trends → recommendations │
- │  output       · health report (MD/HTML) + wegofwd-hub tile │
+ │  output       · fleet dashboard (HTML) + report; wegofwd-hub  │
  └────────────────────────────────────────────────────────────┘
 ```
 
@@ -92,10 +92,17 @@ optimization recommendations** in plain language ("*Docker build cache is 45 GB 
 `docker system prune` would reclaim it*"). It reasons about *what to do and why* — it does
 **not** execute anything. Uses the `wegofwd-llm` seam (BYOK).
 
-### 5. Output
-- A **health report** (Markdown + HTML, doc-digest style) written per run, covering all
-  machines.
-- A **`wegofwd-hub` tile** (the local dashboard on :8088) linking the latest report.
+### 5. Output — fleet dashboard + report
+- A **fleet dashboard**: a single self-contained HTML page, regenerated each run, with
+  **one card per machine** — a status light (green/amber/red), key metrics (CPU · memory ·
+  disk · temperature), tiny **trend sparklines** drawn from the history store, the machine's
+  **active flags** (severity-colored), and its **latest LLM recommendations**. A
+  fleet-summary header shows machines up · open issues · last-refreshed. Theme-aware,
+  offline, inline CSS (no external assets).
+- Surfaced **live through a "Local Watch" `wegofwd-hub` tile** (:8088) — the hub reads the
+  dashboard file fresh from disk on each view, exactly as it does for `portfolio.html` /
+  `doc-digest.html`. No new service or port.
+- A plain **health report** (Markdown) is also written per run for archival / diffing.
 
 ## Scheduling
 - **Collectors:** short interval (~15–30 min) via systemd timer / launchd.
@@ -107,7 +114,8 @@ optimization recommendations** in plain language ("*Docker build cache is 45 GB 
 - **Tailscale** for cross-machine sync (SSH/`tailscale` file transfer over the tailnet).
 - **systemd** timers (Linux) + **launchd** agents (macOS) for scheduling.
 - **`wegofwd-llm`** for the LLM recommendation layer (BYOK; local key).
-- Output as static report + a `wegofwd-hub` tile.
+- Output as a self-contained static **fleet dashboard** (HTML, per-machine cards + sparklines)
+  + a Markdown report, surfaced live via a `wegofwd-hub` tile.
 
 ## Proposed layout
 ```
@@ -117,7 +125,7 @@ local_watch/
   store/             # central metric history (SQLite/JSONL)
   rules/             # deterministic threshold + trend flags
   agent/             # LLM review → recommendations (wegofwd-llm)
-  report/            # MD/HTML health report + hub tile hook
+  report/            # fleet dashboard (HTML, per-machine cards + sparklines) + MD report + hub tile hook
   deploy/            # systemd units, launchd plist, sync setup
   tests/
   pyproject.toml
