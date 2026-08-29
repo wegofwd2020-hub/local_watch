@@ -1,8 +1,11 @@
 from local_watch.schema import Metric, Snapshot
 from local_watch.rules import evaluate, Flag
 
-def snap(disk, facts=None):
-    return Snapshot("box", "linux", "t", [Metric("disk_root_pct", disk, "%")], facts or {})
+def snap(disk, facts=None, mem=None):
+    metrics = [Metric("disk_root_pct", disk, "%")]
+    if mem is not None:
+        metrics.append(Metric("mem_used_pct", mem, "%"))
+    return Snapshot("box", "linux", "t", metrics, facts or {})
 
 def test_disk_crit_over_90():
     flags = evaluate(snap(93.0), {"disk_root_pct": [93.0]})
@@ -22,3 +25,51 @@ def test_updates_pending_flag():
 def test_failed_unit_is_crit():
     flags = evaluate(snap(10.0, {"failed_units": "nginx.service"}), {"disk_root_pct": [10.0]})
     assert any(f.key == "failed_units" and f.severity == "crit" for f in flags)
+
+# Fix round 1: coverage gap tests
+
+# 1. updates_pending severity boundary
+def test_updates_pending_count_12_is_info():
+    """Count 12 updates → severity == 'info' (threshold <20)"""
+    flags = evaluate(snap(10.0, {"updates_pending": "12"}), {"disk_root_pct": [10.0]})
+    upd_flag = next((f for f in flags if f.key == "updates_pending"), None)
+    assert upd_flag is not None
+    assert upd_flag.severity == "info"
+
+def test_updates_pending_count_20_is_warn():
+    """Count 20 updates → severity == 'warn' (boundary: >=20)"""
+    flags = evaluate(snap(10.0, {"updates_pending": "20"}), {"disk_root_pct": [10.0]})
+    upd_flag = next((f for f in flags if f.key == "updates_pending"), None)
+    assert upd_flag is not None
+    assert upd_flag.severity == "warn"
+
+# 2. Negative tests (no flag when under threshold)
+def test_mem_50_no_pressure():
+    """Memory at 50% → no mem_pressure flag"""
+    flags = evaluate(snap(10.0, mem=50.0), {"disk_root_pct": [10.0], "mem_used_pct": [50.0]})
+    assert not any(f.key == "mem_pressure" for f in flags)
+
+def test_no_reboot_required_fact():
+    """No reboot_required fact → no reboot_required flag"""
+    flags = evaluate(snap(10.0), {"disk_root_pct": [10.0]})
+    assert not any(f.key == "reboot_required" for f in flags)
+
+def test_empty_failed_units():
+    """Empty failed_units → no failed_units flag"""
+    flags = evaluate(snap(10.0, {"failed_units": ""}), {"disk_root_pct": [10.0]})
+    assert not any(f.key == "failed_units" for f in flags)
+
+# 3. Disk boundary tests
+def test_disk_80_is_warn():
+    """Disk at exactly 80% → disk_full flag with severity == 'warn'"""
+    flags = evaluate(snap(80.0), {"disk_root_pct": [80.0]})
+    disk_flag = next((f for f in flags if f.key == "disk_full"), None)
+    assert disk_flag is not None
+    assert disk_flag.severity == "warn"
+
+def test_disk_90_is_crit():
+    """Disk at exactly 90% → disk_full flag with severity == 'crit'"""
+    flags = evaluate(snap(90.0), {"disk_root_pct": [90.0]})
+    disk_flag = next((f for f in flags if f.key == "disk_full"), None)
+    assert disk_flag is not None
+    assert disk_flag.severity == "crit"
