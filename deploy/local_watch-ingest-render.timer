@@ -1,0 +1,20 @@
+# local_watch-ingest-render.timer — systemd USER timer (mambakkam only)
+#
+# Runs a few minutes after the fleet's sync timers so freshly-pushed files are
+# on disk before the merge. Collect fires at +2min, sync at +7min, this at
+# +12min, then all three every 20 minutes.
+#
+# Cadence matters to the rules layer: a snapshot is flagged stale after 60
+# minutes (three missed collection runs), so rendering every 20 minutes keeps
+# a healthy machine comfortably inside that window.
+
+[Unit]
+Description=Ingest local_watch snapshots and re-render every ~20 minutes
+
+[Timer]
+OnBootSec=12min
+OnUnitActiveSec=20min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
