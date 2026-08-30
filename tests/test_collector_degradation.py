@@ -18,7 +18,7 @@ _LINUX_FIXTURES = {
 }
 _MACOS_FIXTURES = {
     "df": "macos_df.txt", "vm_stat": "macos_vm_stat.txt",
-    "softwareupdate": "macos_swupdate.txt",
+    "softwareupdate": "macos_swupdate.txt", "launchctl": "macos_launchctl.txt",
 }
 
 
@@ -122,3 +122,17 @@ def test_macos_failed_softwareupdate_omits_updates_pending_fact():
     snap = macos.collect(runner=_runner(_MACOS_FIXTURES, failing=["softwareupdate"]), machine="mac", now="t")
     assert "updates_pending" not in snap.facts
     assert "softwareupdate" in snap.facts["probes_failed"]
+
+
+def test_macos_failed_launchctl_omits_failed_units_fact():
+    # Same discipline as Linux systemctl: "could not ask" must not read as
+    # "nothing is broken".
+    snap = macos.collect(runner=_runner(_MACOS_FIXTURES, failing=["launchctl"]), machine="mac", now="t")
+    assert "failed_units" not in snap.facts
+    assert "launchctl" in snap.facts["probes_failed"]
+
+
+def test_macos_silent_launchctl_means_no_failed_agents():
+    snap = macos.collect(runner=_runner(_MACOS_FIXTURES, blank=["launchctl"]), machine="mac", now="t")
+    assert snap.facts["failed_units"] == ""
+    assert "launchctl" not in snap.facts["probes_failed"]

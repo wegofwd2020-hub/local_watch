@@ -43,6 +43,26 @@ def _mem_used_pct(vm_stat_out: str) -> float | None:
     used = active + wired + compressed
     return round(100.0 * used / total, 1) if total else None
 
+def _failed_agents(launchctl_out: str) -> str:
+    """macOS analogue of `systemctl --failed`.
+
+    `launchctl list` prints "PID<tab>Status<tab>Label"; Status is the agent's
+    last exit code, so a non-zero value (negative = killed by a signal) means
+    it exited badly. Read-only: listing never loads or unloads anything.
+    """
+    failed = []
+    for ln in launchctl_out.splitlines():
+        parts = ln.split()
+        if len(parts) < 3 or parts[0] == "PID":       # header row
+            continue
+        try:
+            status = int(parts[1])
+        except ValueError:
+            continue                                   # "-" or malformed
+        if status != 0:
+            failed.append(parts[2])
+    return ",".join(failed)
+
 def _updates_pending(swupdate_out: str) -> int:
     return sum(1 for ln in swupdate_out.splitlines() if ln.strip().startswith("* Label:"))
 
@@ -72,6 +92,7 @@ def collect(runner=probe, machine: str = "", now: str = "") -> Snapshot:
     df = read("df", ["df", "-P"])
     vm_stat = read("vm_stat", ["vm_stat"])
     swupdate = read("softwareupdate", ["softwareupdate", "--list"])
+    launchctl = read("launchctl", ["launchctl", "list"])
 
     metric("disk_root_pct", "df", df, _disk_root_pct)
     metric("mem_used_pct", "vm_stat", vm_stat, _mem_used_pct)
@@ -80,6 +101,8 @@ def collect(runner=probe, machine: str = "", now: str = "") -> Snapshot:
     # see "unknown" rather than a reassuring zero.
     if swupdate is not None:
         facts["updates_pending"] = str(_updates_pending(swupdate))
+    if launchctl is not None:
+        facts["failed_units"] = _failed_agents(launchctl)
     facts["reboot_required"] = "false"   # refined in a later step / task 2b if desired
     facts["probes_failed"] = ",".join(failed)
     return Snapshot(machine=machine, os="macos", ts=now, metrics=metrics, facts=facts)
