@@ -2,24 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  com.wegofwd.localwatch.plist — macOS LaunchAgent
+  com.wegofwd.localwatch.plist — macOS LaunchAgent: collect
 
   Runs one read-only local_watch collect pass every 20 minutes
-  (StartInterval=1200) and writes the snapshot to the local spool directory.
-  Does NOT sync anywhere on its own — see deploy/README.md step 3.
+  (StartInterval=1200) and writes a snapshot to the local spool directory.
+  Does not sync anywhere — that is com.wegofwd.localwatch-sync.plist.
 
-  ONE EDIT NEEDED before installing: replace /Users/YOURUSER below with the
-  real home directory (launchd expands neither ~ nor $HOME in these paths).
+  NO EDITS NEEDED. Every path is read at runtime from
+  ~/.config/local_watch/env, the same file the Linux units use, so the
+  checkout location is configured in exactly one place per machine.
+  launchd expands neither ~ nor $HOME in plist values, hence the sh -c
+  wrapper: sourcing the env file inside the shell is what makes this
+  portable without hand-substituting a home directory.
 
-  Everything else resolves at runtime. The command is wrapped in `sh -c` so
-  the hostname comes from `hostname -s`, matching what the Linux units and the
-  sync step use — the previous %HOST% placeholder had to be substituted by
-  hand and silently produced a filename mismatch if the short and full
-  hostnames differed.
-
-  Not loaded automatically; copying it into ~/Library/LaunchAgents and running
-  launchctl load is an operator step. To stop:
-    launchctl unload ~/Library/LaunchAgents/com.wegofwd.localwatch.plist
+  Install: see deploy/INSTALL-macos.md
 -->
 <plist version="1.0">
 <dict>
@@ -30,7 +26,20 @@
     <array>
         <string>/bin/sh</string>
         <string>-c</string>
-        <string>mkdir -p "$HOME/.local/share/local_watch/spool" &amp;&amp; exec /Users/YOURUSER/local_watch/.venv/bin/local_watch collect --machine "$(hostname -s)" --out "$HOME/.local/share/local_watch/spool/$(hostname -s).json"</string>
+        <string>
+          if [ ! -f "$HOME/.config/local_watch/env" ]; then
+            echo "local_watch: missing $HOME/.config/local_watch/env (see deploy/INSTALL-macos.md)" &gt;&amp;2
+            exit 1
+          fi
+          . "$HOME/.config/local_watch/env"
+          : "${LOCAL_WATCH_DATA:=$HOME/.local/share/local_watch}"
+          mkdir -p "$LOCAL_WATCH_DATA/spool"
+          exec &gt;&gt;"$LOCAL_WATCH_DATA/collect.log" 2&gt;&amp;1
+          echo "--- collect $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exec "$LOCAL_WATCH_HOME/.venv/bin/local_watch" collect \
+            --machine "$(hostname -s)" \
+            --out "$LOCAL_WATCH_DATA/spool/$(hostname -s).json"
+        </string>
     </array>
 
     <key>StartInterval</key>
@@ -38,11 +47,5 @@
 
     <key>RunAtLoad</key>
     <true/>
-
-    <key>StandardOutPath</key>
-    <string>/Users/YOURUSER/.local/share/local_watch/collect.out.log</string>
-
-    <key>StandardErrorPath</key>
-    <string>/Users/YOURUSER/.local/share/local_watch/collect.err.log</string>
 </dict>
 </plist>

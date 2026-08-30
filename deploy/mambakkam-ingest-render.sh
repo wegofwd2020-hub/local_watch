@@ -3,7 +3,10 @@
 # dashboard and markdown report. Invoked by local_watch-ingest-render.service;
 # safe to run by hand for a manual cycle.
 #
-# Reads $LOCAL_WATCH_DATA/ingest and writes only inside $LOCAL_WATCH_DATA.
+# Reads $LOCAL_WATCH_DATA/ingest (snapshots synced from the rest of the fleet)
+# and $LOCAL_WATCH_DATA/spool (this machine's own collect output, since the
+# aggregator is also a collector). Reading both is why the aggregator needs no
+# extra step to fold in its own readings. Writes only inside $LOCAL_WATCH_DATA.
 # Ingested files are deliberately NOT deleted: each machine overwrites its own
 # <hostname>.json, so the directory stays bounded at one file per machine, and
 # re-ingesting is idempotent (the store keys on machine+timestamp). Leaving a
@@ -20,12 +23,12 @@ if [ ! -x "$BIN" ]; then
     exit 1
 fi
 
-mkdir -p "$DATA/ingest"
+mkdir -p "$DATA/ingest" "$DATA/spool"
 
 # An unmatched glob would otherwise be passed through literally and read as a
 # filename, so expand it explicitly and check.
 shopt -s nullglob
-snapshots=("$DATA/ingest"/*.json)
+snapshots=("$DATA/ingest"/*.json "$DATA/spool"/*.json)
 
 if [ ${#snapshots[@]} -gt 0 ]; then
     "$BIN" ingest --store "$DATA/store.db" "${snapshots[@]}"
@@ -33,7 +36,7 @@ else
     # Not an error: render anyway, so the dashboard keeps showing the fleet's
     # existing history with staleness flags rather than going blank the moment
     # a sync breaks.
-    echo "local_watch: no snapshots in $DATA/ingest; rendering existing history" >&2
+    echo "local_watch: no snapshots in $DATA/{ingest,spool}; rendering existing history" >&2
 fi
 
 # This --html path is load-bearing: wegofwd-hub's "Local Watch" tile serves
