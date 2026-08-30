@@ -25,7 +25,7 @@ _MACOS_FIXTURES = {
 def _runner(fixtures, failing=(), blank=()):
     """Fixture-backed runner; `failing` commands return None (probe failure),
     `blank` commands return "" (probe ran, produced nothing parseable)."""
-    def run(cmd):
+    def run(cmd, timeout=None):
         if cmd[0] in failing:
             return None
         if cmd[0] in blank:

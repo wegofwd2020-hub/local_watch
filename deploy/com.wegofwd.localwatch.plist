@@ -2,26 +2,20 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
   "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  com.wegofwd.localwatch.plist — macOS LaunchAgent
+  com.wegofwd.localwatch.plist — macOS LaunchAgent: collect
 
-  Runs a single read-only local_watch collect pass every 20 minutes
-  (StartInterval=1200 seconds) and writes the snapshot to the local spool
-  directory. Does NOT sync anywhere on its own — see deploy/README.md.
+  Runs one read-only local_watch collect pass every 20 minutes
+  (StartInterval=1200) and writes a snapshot to the local spool directory.
+  Does not sync anywhere — that is com.wegofwd.localwatch-sync.plist.
 
-  ASSUMPTIONS (adjust before installing, see README):
-    - local_watch is installed into a Python environment reachable as
-      `local_watch` on PATH for the login user (e.g. `pip install -e .`
-      inside a venv, with the venv's bin dir referenced directly below
-      since launchd does not source shell rc files / activate venvs).
-    - Replace /Users/YOURUSER below with the actual home directory, and
-      the ExecStart-equivalent path below with wherever the venv actually
-      lives (e.g. ~/local_watch/.venv/bin/local_watch).
-    - ~/.local/share/local_watch/spool exists (created once by the
-      operator: `mkdir -p ~/.local/share/local_watch/spool`).
+  NO EDITS NEEDED. Every path is read at runtime from
+  ~/.config/local_watch/env, the same file the Linux units use, so the
+  checkout location is configured in exactly one place per machine.
+  launchd expands neither ~ nor $HOME in plist values, hence the sh -c
+  wrapper: sourcing the env file inside the shell is what makes this
+  portable without hand-substituting a home directory.
 
-  This file is NOT loaded/enabled automatically — copying it into
-  ~/Library/LaunchAgents and running `launchctl load` is a manual,
-  operator-run step documented in deploy/README.md.
+  Install: see deploy/INSTALL-macos.md
 -->
 <plist version="1.0">
 <dict>
@@ -30,28 +24,28 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/YOURUSER/local_watch/.venv/bin/local_watch</string>
-        <string>collect</string>
-        <string>--machine</string>
-        <string>%HOST%</string>
-        <string>--out</string>
-        <string>/Users/YOURUSER/.local/share/local_watch/spool/%HOST%.json</string>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>
+          if [ ! -f "$HOME/.config/local_watch/env" ]; then
+            echo "local_watch: missing $HOME/.config/local_watch/env (see deploy/INSTALL-macos.md)" &gt;&amp;2
+            exit 1
+          fi
+          . "$HOME/.config/local_watch/env"
+          : "${LOCAL_WATCH_DATA:=$HOME/.local/share/local_watch}"
+          mkdir -p "$LOCAL_WATCH_DATA/spool"
+          exec &gt;&gt;"$LOCAL_WATCH_DATA/collect.log" 2&gt;&amp;1
+          echo "--- collect $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          exec "$LOCAL_WATCH_HOME/.venv/bin/local_watch" collect \
+            --machine "$(hostname -s)" \
+            --out "$LOCAL_WATCH_DATA/spool/$(hostname -s).json"
+        </string>
     </array>
-
-    <!-- launchd does not expand %H like systemd does; the operator must
-         replace %HOST% above with the machine's actual hostname (see
-         README "Mac" section) before loading this agent. -->
 
     <key>StartInterval</key>
     <integer>1200</integer>
 
     <key>RunAtLoad</key>
     <true/>
-
-    <key>StandardOutPath</key>
-    <string>/Users/YOURUSER/.local/share/local_watch/collect.out.log</string>
-
-    <key>StandardErrorPath</key>
-    <string>/Users/YOURUSER/.local/share/local_watch/collect.err.log</string>
 </dict>
 </plist>

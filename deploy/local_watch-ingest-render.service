@@ -1,0 +1,19 @@
+# local_watch-ingest-render.service — systemd USER unit (mambakkam only)
+#
+# Merges every synced snapshot into the history store and re-renders the
+# dashboard + markdown report. Read-only with respect to the system: it only
+# reads $LOCAL_WATCH_DATA/ingest and writes inside $LOCAL_WATCH_DATA.
+#
+# The two CLI calls are chained in deploy/mambakkam-ingest-render.sh because a
+# oneshot ExecStart runs one command, and the ingest step needs a guard for an
+# empty ingest directory.
+
+[Unit]
+Description=local_watch: ingest synced snapshots and re-render the dashboard
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/local_watch/env
+ExecStart=/bin/sh -c 'exec "$LOCAL_WATCH_HOME/deploy/mambakkam-ingest-render.sh"'
+
+NoNewPrivileges=true

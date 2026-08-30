@@ -1,0 +1,19 @@
+# local_watch-sync.timer — systemd USER timer (Linux, non-aggregator boxes)
+#
+# Pushes the snapshot every 20 minutes, offset from the collect timer so the
+# file on disk is fresh rather than one cycle stale. Collect fires at boot+2min
+# then every 20min; this fires at boot+7min then every 20min, landing ~5
+# minutes after each collect.
+
+[Unit]
+Description=Push local_watch snapshot to the aggregator every ~20 minutes
+
+[Timer]
+OnBootSec=7min
+OnUnitActiveSec=20min
+# Catch up once after the machine was asleep or off, rather than waiting a
+# full interval to re-report.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

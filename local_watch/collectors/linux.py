@@ -37,9 +37,9 @@ def collect(runner=probe, machine: str = "", now: str = "") -> Snapshot:
     metrics: list[Metric] = []
     facts: dict[str, str] = {}
 
-    def read(name: str, cmd: list[str]) -> str | None:
+    def read(name: str, cmd: list[str], timeout: int | None = None) -> str | None:
         """Run one probe; record it as failed if it could not run."""
-        out = runner(cmd)
+        out = runner(cmd, timeout=timeout)
         if out is None:
             failed.append(name)
         return out

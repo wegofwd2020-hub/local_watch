@@ -1,0 +1,36 @@
+# local_watch-sync.service — systemd USER unit (Linux, non-aggregator boxes)
+#
+# Copies this machine's one spool snapshot to the aggregator's ingest
+# directory over Tailscale. This is the only unit in the fleet that touches
+# the network, and it only ever WRITES ONE FILE to a path under the remote
+# user's home. It reads nothing back and runs nothing remotely.
+#
+# Requires LOCAL_WATCH_REMOTE in ~/.config/local_watch/env, and passwordless
+# ssh to it — Tailscale SSH provides this via tailnet ACL, so no key material
+# needs to live on the box. Verify by hand once before enabling:
+#   ssh $LOCAL_WATCH_REMOTE true
+#
+# Do NOT enable this on mambakkam itself: the aggregator has nothing to sync
+# to, and its own collect output is picked up locally (see deploy/README.md).
+
+[Unit]
+Description=local_watch: push this machine's snapshot to the aggregator
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=%h/.config/local_watch/env
+
+# Skip quietly if collect has not produced a snapshot yet (first boot, or a
+# collect that failed). Sending nothing is correct: the aggregator's staleness
+# rule will notice the gap on its own, which is the honest signal.
+ExecStart=/bin/sh -c '\
+  snap="$LOCAL_WATCH_DATA/spool/$(hostname -s).json"; \
+  if [ ! -f "$snap" ]; then \
+    echo "local_watch-sync: no snapshot at $snap yet; nothing to push" >&2; \
+    exit 0; \
+  fi; \
+  exec rsync -az --rsh=ssh "$snap" \
+    "$LOCAL_WATCH_REMOTE:.local/share/local_watch/ingest/"'
+
+NoNewPrivileges=true

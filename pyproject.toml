@@ -1,10 +1,28 @@
+# Without an explicit build-system, pip falls back to setuptools' flat-layout
+# auto-discovery, which refuses to build this repo: it sees local_watch/,
+# tests/, fixtures/, deploy/ and docs/ as competing top-level packages. Pin
+# the backend and name the packages instead.
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "local_watch"
 version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = ["wegofwd-llm @ git+https://github.com/wegofwd2020-hub/wegofwd-llm@v0.2.0"]
+
+# Every deploy unit, the launchd plist and deploy/mambakkam-ingest-render.sh
+# invoke `.venv/bin/local_watch`, which exists only because of this entry.
+[project.scripts]
+local_watch = "local_watch.cli:main"
+
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]
+
+[tool.setuptools]
+packages = ["local_watch", "local_watch.collectors"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

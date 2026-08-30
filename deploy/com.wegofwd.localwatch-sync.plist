@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  com.wegofwd.localwatch-sync.plist — macOS LaunchAgent: sync
+
+  Pushes this Mac's one spool snapshot to the aggregator's ingest directory
+  over Tailscale, every 20 minutes. Counterpart to the Linux
+  local_watch-sync.service. This is the only agent here that touches the
+  network: it writes exactly one file to a path under the remote user's
+  home, reads nothing back, and runs nothing remotely.
+
+  Offset from collect by starting 5 minutes later in practice (launchd has
+  no OnBootSec equivalent; StartInterval counts from load, so load this
+  agent a few minutes after the collect agent, or simply accept that the
+  first cycle may push a slightly stale file — the second will not).
+
+  Requires passwordless ssh to $LOCAL_WATCH_REMOTE. Tailscale SSH provides
+  this via tailnet ACL, so no key material needs to live on the Mac.
+
+  NO EDITS NEEDED — configuration comes from ~/.config/local_watch/env.
+  Install: see deploy/INSTALL-macos.md
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.wegofwd.localwatch-sync</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>
+          if [ ! -f "$HOME/.config/local_watch/env" ]; then
+            echo "local_watch-sync: missing $HOME/.config/local_watch/env" &gt;&amp;2
+            exit 1
+          fi
+          . "$HOME/.config/local_watch/env"
+          : "${LOCAL_WATCH_DATA:=$HOME/.local/share/local_watch}"
+          exec &gt;&gt;"$LOCAL_WATCH_DATA/sync.log" 2&gt;&amp;1
+          echo "--- sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          if [ -z "$LOCAL_WATCH_REMOTE" ]; then
+            echo "LOCAL_WATCH_REMOTE is unset; nothing to sync to" &gt;&amp;2
+            exit 1
+          fi
+          snap="$LOCAL_WATCH_DATA/spool/$(hostname -s).json"
+          if [ ! -f "$snap" ]; then
+            echo "no snapshot at $snap yet; nothing to push" &gt;&amp;2
+            exit 0
+          fi
+          exec rsync -az --rsh=ssh "$snap" \
+            "$LOCAL_WATCH_REMOTE:.local/share/local_watch/ingest/"
+        </string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>1200</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>

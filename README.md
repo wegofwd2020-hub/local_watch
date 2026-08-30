@@ -4,8 +4,10 @@ Read-only monitoring of a small personal fleet, with **LLM-assisted, plain-langu
 optimization recommendations**. It watches your machines, spots problems and trends, and
 tells you what to do about them — **it never changes system state itself** (v1).
 
-> **Status:** design approved 2026-08-29 · scaffolding. Not yet implemented — this README is
-> the scope of work; build follows via the normal spec → plan → SDD cycle.
+> **Status:** v1 implemented and merged to `main`. Collectors, history store, rules,
+> LLM recommendations and the HTML/Markdown report all work end-to-end; see
+> `deploy/README.md` for the operator runbook. Not yet running on the fleet —
+> the units are inert until an operator enables them.
 
 ## Why
 
