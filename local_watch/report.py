@@ -5,7 +5,14 @@ from local_watch.rules import Flag
 
 _SEV = {"crit": "#d64545", "warn": "#d9a441", "info": "#5b8def"}
 
-def _sparkline(vals: list[float], w: int = 100, h: int = 24) -> str:
+def _sparkline(points: list[tuple[str, float]], w: int = 100, h: int = 24) -> str:
+    """Plot the values of a (ts, value) series.
+
+    Points are spaced evenly across the width rather than by elapsed time:
+    at 100px this reads the same either way, and the rules layer — not the
+    sparkline — is what draws conclusions from the real intervals.
+    """
+    vals = [v for _, v in points]
     if len(vals) < 2:
         return "<svg width='%d' height='%d'></svg>" % (w, h)
     lo, hi = min(vals), max(vals); rng = (hi - lo) or 1.0

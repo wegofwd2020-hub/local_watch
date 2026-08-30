@@ -5,7 +5,9 @@ from local_watch.report import render_dashboard, render_markdown
 SNAPS = [Snapshot("box1", "linux", "t", [Metric("disk_root_pct", 93.0, "%")], {})]
 FLAGS = [Flag("box1", "disk_full", "crit", "Root filesystem 93% full")]
 RECS = {"box1": "Prune old logs."}
-SERIES = {"box1": {"disk_root_pct": [80.0, 85.0, 93.0]}}
+SERIES = {"box1": {"disk_root_pct": [("2026-08-30T00:00:00Z", 80.0),
+                                     ("2026-08-30T01:00:00Z", 85.0),
+                                     ("2026-08-30T02:00:00Z", 93.0)]}}
 
 def test_dashboard_is_self_contained_html():
     html = render_dashboard(SNAPS, FLAGS, RECS, SERIES)
@@ -17,3 +19,10 @@ def test_dashboard_is_self_contained_html():
 def test_markdown_lists_machine_and_flags():
     md = render_markdown(SNAPS, FLAGS, RECS)
     assert "box1" in md and "Root filesystem 93% full" in md and "Prune old logs." in md
+
+
+def test_sparkline_plots_every_point_in_a_timestamped_series():
+    # store.series yields (ts, value) pairs; the sparkline must plot the
+    # values, not choke on the tuples.
+    html = render_dashboard(SNAPS, FLAGS, RECS, SERIES)
+    assert "<polyline" in html and html.count(",") >= 3

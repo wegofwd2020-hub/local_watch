@@ -10,6 +10,16 @@ STALE_AFTER_MIN = 60
 
 _TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
+# Trend projection guards. A rate is only worth extrapolating if it is backed
+# by enough readings over enough wall-clock time — 13 samples inside one hour
+# say nothing about next Tuesday.
+_MIN_TREND_POINTS = 6
+_MIN_TREND_SPAN_HOURS = 6.0
+_MIN_SLOPE_PCT_PER_DAY = 0.5    # below this, it is sampling noise, not a trend
+_PROJECT_CRIT_DAYS = 2.0
+_PROJECT_WARN_DAYS = 7.0
+_DISK_FULL_PCT = 100.0
+
 @dataclass(frozen=True)
 class Flag:
     machine: str
@@ -36,6 +46,62 @@ def _age_label(minutes: int) -> str:
         return f"{minutes // 60}h"
     return f"{minutes // (60 * 24)}d"
 
+def _slope_pct_per_day(points: list[tuple[str, float]]) -> float | None:
+    """Least-squares rate of change, in percentage points per day.
+
+    Fitted against real elapsed time rather than sample index: collection
+    gaps (a sleeping laptop, a missed timer) would otherwise compress days of
+    history into what looks like a steep climb. Points with unreadable
+    timestamps are dropped rather than guessed at.
+    """
+    xs: list[float] = []
+    ys: list[float] = []
+    origin = None
+    for ts, value in points:
+        t = _parse_ts(ts)
+        if t is None:
+            continue
+        if origin is None:
+            origin = t
+        xs.append((t - origin).total_seconds() / 3600.0)
+        ys.append(value)
+    if len(xs) < _MIN_TREND_POINTS or (max(xs) - min(xs)) < _MIN_TREND_SPAN_HOURS:
+        return None
+    n = len(xs)
+    mean_x, mean_y = sum(xs) / n, sum(ys) / n
+    denominator = sum((x - mean_x) ** 2 for x in xs)
+    if denominator == 0:
+        return None
+    slope_per_hour = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / denominator
+    return slope_per_hour * 24.0
+
+def _eta_label(days: float) -> str:
+    """Floor rather than round: understating the headroom errs toward warning
+    early, which is the safe direction for a capacity heads-up."""
+    if days < 1:
+        return f"{int(days * 24)}h"
+    return f"{int(days)}d"
+
+def _disk_trend(latest: Snapshot, points: list[tuple[str, float]]) -> Flag | None:
+    """Flag a root filesystem on course to fill.
+
+    The level check says where the disk is now; this says how long that lasts.
+    A disk at 55% climbing 20%/day is the more urgent of the two.
+    """
+    current = _metric(latest, "disk_root_pct")
+    if current is None:
+        return None                     # probe failed; nothing to project from
+    slope = _slope_pct_per_day(points)
+    if slope is None or slope < _MIN_SLOPE_PCT_PER_DAY:
+        return None
+    days = max(0.0, (_DISK_FULL_PCT - current) / slope)
+    if days > _PROJECT_WARN_DAYS:
+        return None                     # true, but not news
+    severity = "crit" if days <= _PROJECT_CRIT_DAYS else "warn"
+    return Flag(latest.machine, "disk_filling", severity,
+                f"Root filesystem filling at +{slope:.1f}%/day "
+                f"- full in ~{_eta_label(days)} at this rate")
+
 def _staleness(latest: Snapshot, now: str) -> Flag | None:
     """Flag a snapshot we can no longer treat as current.
 
@@ -54,7 +120,8 @@ def _staleness(latest: Snapshot, now: str) -> Flag | None:
     return Flag(latest.machine, "stale", "crit",
                 f"No snapshot for {_age_label(minutes)} — readings below are stale")
 
-def evaluate(latest: Snapshot, series: dict[str, list[float]], now: str | None = None) -> list[Flag]:
+def evaluate(latest: Snapshot, series: dict[str, list[tuple[str, float]]],
+             now: str | None = None) -> list[Flag]:
     f: list[Flag] = []
     mc = latest.machine
 
@@ -75,6 +142,12 @@ def evaluate(latest: Snapshot, series: dict[str, list[float]], now: str | None =
             f.append(Flag(mc, "disk_full", "crit", f"Root filesystem {disk:.0f}% full"))
         elif disk >= 80:
             f.append(Flag(mc, "disk_full", "warn", f"Root filesystem {disk:.0f}% full"))
+    # Memory is deliberately left out of trend projection: it sawtooths by
+    # design (caches grow until something needs the pages), so a rising fit
+    # over any short window is noise dressed up as a warning.
+    trend = _disk_trend(latest, series.get("disk_root_pct", []))
+    if trend is not None:
+        f.append(trend)
     mem = _metric(latest, "mem_used_pct")
     if mem is not None and mem >= 90:
         f.append(Flag(mc, "mem_pressure", "warn", f"Memory {mem:.0f}% used"))
