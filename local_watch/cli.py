@@ -4,6 +4,11 @@ from local_watch.schema import Snapshot
 from local_watch.store import Store
 from local_watch import rules, agent, report
 
+# How many readings to pull per metric when rendering. At the deployed
+# 20-minute cadence this is ~4 days of history — enough for the trend rules
+# to fit a rate against, and still enough on a box sampling far more often.
+_HISTORY_POINTS = 288
+
 def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -35,10 +40,13 @@ def main(argv=None) -> int:
         snaps = [st.latest(m) for m in st.machines()]
         flags = []
         series = {}
+        # One clock for the whole render, so every machine is judged
+        # stale-or-fresh against the same instant.
+        now = _now()
         for s in snaps:
-            ser = {m.name: st.series(s.machine, m.name, 20) for m in s.metrics}
+            ser = {m.name: st.series(s.machine, m.name, _HISTORY_POINTS) for m in s.metrics}
             series[s.machine] = ser
-            flags += rules.evaluate(s, ser)
+            flags += rules.evaluate(s, ser, now=now)
         recs = agent.recommend(snaps, flags)
         open(a.html, "w").write(report.render_dashboard(snaps, flags, recs, series))
         open(a.md, "w").write(report.render_markdown(snaps, flags, recs))

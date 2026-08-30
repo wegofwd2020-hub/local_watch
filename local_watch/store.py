@@ -18,13 +18,19 @@ class Store:
                               (machine,)).fetchone()
         return Snapshot.from_json(row[0]) if row else None
 
-    def series(self, machine: str, metric: str, n: int) -> list[float]:
-        rows = self.db.execute("select json from snapshots where machine=? order by ts desc limit ?",
+    def series(self, machine: str, metric: str, n: int) -> list[tuple[str, float]]:
+        """Up to `n` most recent (ts, value) points for one metric, oldest first.
+
+        Timestamps are part of the contract: readings are not evenly spaced
+        (a sleeping laptop leaves gaps), so a rate of change can only be
+        computed against real elapsed time, never against sample count.
+        """
+        rows = self.db.execute("select ts, json from snapshots where machine=? order by ts desc limit ?",
                                (machine, n)).fetchall()
-        out = []
-        for (j,) in rows:
-            s = Snapshot.from_json(j)
-            out += [m.value for m in s.metrics if m.name == metric]
+        out: list[tuple[str, float]] = []
+        for ts, j in rows:
+            snap = Snapshot.from_json(j)
+            out += [(ts, m.value) for m in snap.metrics if m.name == metric]
         return out[::-1]
 
     def machines(self) -> list[str]:

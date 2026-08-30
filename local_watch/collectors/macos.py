@@ -2,7 +2,7 @@ from __future__ import annotations
 from local_watch.schema import Metric, Snapshot
 from local_watch.collectors.base import probe
 
-def _disk_root_pct(df_out: str) -> float:
+def _disk_root_pct(df_out: str) -> float | None:
     # macOS `df -P` uses the same POSIX columns as Linux (Filesystem, blocks,
     # Used, Available, Capacity, Mounted on), but on APFS macOS the "/" mount
     # is the sealed read-only system snapshot (near-empty by design); real
@@ -17,7 +17,7 @@ def _disk_root_pct(df_out: str) -> float:
             return float(parts[4].rstrip("%"))
         if parts[5] == "/":
             root_pct = float(parts[4].rstrip("%"))
-    return root_pct if root_pct is not None else 0.0
+    return root_pct
 
 def _vm_stat_pages(vm_stat_out: str) -> dict[str, int]:
     pages: dict[str, int] = {}
@@ -32,7 +32,7 @@ def _vm_stat_pages(vm_stat_out: str) -> dict[str, int]:
         pages[label] = int(value)
     return pages
 
-def _mem_used_pct(vm_stat_out: str) -> float:
+def _mem_used_pct(vm_stat_out: str) -> float | None:
     pages = _vm_stat_pages(vm_stat_out)
     free = pages.get("pages free", 0)
     active = pages.get("pages active", 0)
@@ -41,17 +41,68 @@ def _mem_used_pct(vm_stat_out: str) -> float:
     compressed = pages.get("pages occupied by compressor", 0)
     total = free + active + inactive + wired + compressed
     used = active + wired + compressed
-    return round(100.0 * used / total, 1) if total else 0.0
+    return round(100.0 * used / total, 1) if total else None
+
+def _failed_agents(launchctl_out: str) -> str:
+    """macOS analogue of `systemctl --failed`.
+
+    `launchctl list` prints "PID<tab>Status<tab>Label"; Status is the agent's
+    last exit code, so a non-zero value (negative = killed by a signal) means
+    it exited badly. Read-only: listing never loads or unloads anything.
+    """
+    failed = []
+    for ln in launchctl_out.splitlines():
+        parts = ln.split()
+        if len(parts) < 3 or parts[0] == "PID":       # header row
+            continue
+        try:
+            status = int(parts[1])
+        except ValueError:
+            continue                                   # "-" or malformed
+        if status != 0:
+            failed.append(parts[2])
+    return ",".join(failed)
 
 def _updates_pending(swupdate_out: str) -> int:
     return sum(1 for ln in swupdate_out.splitlines() if ln.strip().startswith("* Label:"))
 
 def collect(runner=probe, machine: str = "", now: str = "") -> Snapshot:
-    df = runner(["df", "-P"])
-    vm_stat = runner(["vm_stat"])
-    swupdate = runner(["softwareupdate", "--list"])
-    metrics = [Metric("disk_root_pct", _disk_root_pct(df), "%"),
-               Metric("mem_used_pct", _mem_used_pct(vm_stat), "%")]
-    facts = {"updates_pending": str(_updates_pending(swupdate)),
-             "reboot_required": "false"}   # refined in a later step / task 2b if desired
+    failed: list[str] = []
+    metrics: list[Metric] = []
+    facts: dict[str, str] = {}
+
+    def read(name: str, cmd: list[str]) -> str | None:
+        """Run one probe; record it as failed if it could not run."""
+        out = runner(cmd)
+        if out is None:
+            failed.append(name)
+        return out
+
+    def metric(name: str, probe_name: str, raw: str | None, parse, unit: str = "%") -> None:
+        """Add a metric, or drop it and mark the probe failed. Never emits a
+        placeholder zero — an absent metric plus a flag beats a false reading."""
+        if raw is None:
+            return                      # read() already recorded the failure
+        value = parse(raw)
+        if value is None:
+            failed.append(probe_name)   # ran, but produced nothing parseable
+        else:
+            metrics.append(Metric(name, value, unit))
+
+    df = read("df", ["df", "-P"])
+    vm_stat = read("vm_stat", ["vm_stat"])
+    swupdate = read("softwareupdate", ["softwareupdate", "--list"])
+    launchctl = read("launchctl", ["launchctl", "list"])
+
+    metric("disk_root_pct", "df", df, _disk_root_pct)
+    metric("mem_used_pct", "vm_stat", vm_stat, _mem_used_pct)
+
+    # Facts are omitted entirely when their probe failed, so downstream rules
+    # see "unknown" rather than a reassuring zero.
+    if swupdate is not None:
+        facts["updates_pending"] = str(_updates_pending(swupdate))
+    if launchctl is not None:
+        facts["failed_units"] = _failed_agents(launchctl)
+    facts["reboot_required"] = "false"   # refined in a later step / task 2b if desired
+    facts["probes_failed"] = ",".join(failed)
     return Snapshot(machine=machine, os="macos", ts=now, metrics=metrics, facts=facts)

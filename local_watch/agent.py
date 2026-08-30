@@ -11,10 +11,15 @@ def build_prompt(machine: str, snap: Snapshot, flags: list[Flag]) -> str:
                  "recommendations for this machine. Do not suggest anything destructive without warning.")
     return "\n".join(lines)
 
-def _fallback(machine: str, flags: list[Flag]) -> str:
-    if not flags:
-        return "No issues detected."
-    return "Issues to address:\n" + "\n".join(f"- [{f.severity}] {f.message}" for f in flags)
+# Printed with every rules-only answer. Without it a fallback reading
+# "No issues detected." is indistinguishable from the same sentence produced by
+# a healthy LLM — the reader cannot tell the recommendation engine never ran.
+FALLBACK_NOTICE = "[LLM unavailable - deterministic rules only]"
+
+def _fallback(flags: list[Flag]) -> str:
+    body = ("No issues detected." if not flags else
+            "Issues to address:\n" + "\n".join(f"- [{f.severity}] {f.message}" for f in flags))
+    return f"{FALLBACK_NOTICE}\n{body}"
 
 def _default_provider():
     # Imported/read lazily so importing this module + running tests never needs
@@ -23,7 +28,7 @@ def _default_provider():
     from wegofwd_llm.registry import build_provider
     from wegofwd_llm.contract import LLMRequest
     key = open(os.path.expanduser("~/.config/wegofwd/anthropic_api_key")).read().strip()
-    real = build_provider("anthropic", api_key=key, model="claude-sonnet-4-6")
+    real = build_provider("anthropic", api_key=key, model="claude-sonnet-5")
 
     class _Adapter:
         def complete(self, prompt: str) -> str:
@@ -41,9 +46,9 @@ def recommend(snapshots: list[Snapshot], flags: list[Flag], provider=None) -> di
     for snap in snapshots:
         mf = [f for f in flags if f.machine == snap.machine]
         if provider is None:
-            out[snap.machine] = _fallback(snap.machine, mf); continue
+            out[snap.machine] = _fallback(mf); continue
         try:
             out[snap.machine] = provider.complete(build_prompt(snap.machine, snap, mf)).strip()
         except Exception:
-            out[snap.machine] = _fallback(snap.machine, mf)
+            out[snap.machine] = _fallback(mf)
     return out

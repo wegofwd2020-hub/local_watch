@@ -1,10 +1,18 @@
 from __future__ import annotations
+from html import escape
 from local_watch.schema import Snapshot
 from local_watch.rules import Flag
 
 _SEV = {"crit": "#d64545", "warn": "#d9a441", "info": "#5b8def"}
 
-def _sparkline(vals: list[float], w: int = 100, h: int = 24) -> str:
+def _sparkline(points: list[tuple[str, float]], w: int = 100, h: int = 24) -> str:
+    """Plot the values of a (ts, value) series.
+
+    Points are spaced evenly across the width rather than by elapsed time:
+    at 100px this reads the same either way, and the rules layer — not the
+    sparkline — is what draws conclusions from the real intervals.
+    """
+    vals = [v for _, v in points]
     if len(vals) < 2:
         return "<svg width='%d' height='%d'></svg>" % (w, h)
     lo, hi = min(vals), max(vals); rng = (hi - lo) or 1.0
@@ -16,16 +24,20 @@ def _status(flags: list[Flag]) -> str:
     return "crit" if "crit" in sevs else "warn" if "warn" in sevs else "info"
 
 def render_dashboard(snapshots, flags, recs, series) -> str:
+    # Every value below is attacker-influenced: `recs` is LLM output, flag
+    # messages carry systemctl unit names, and machine/OS come from hostnames.
+    # Escape all of it — the only markup in a card is markup we wrote here.
     cards = []
     for s in snapshots:
         mf = [f for f in flags if f.machine == s.machine]
         dot = _SEV[_status(mf)]
-        mrows = "".join(f"<div class='m'>{m.name}: <b>{m.value}{m.unit}</b> "
+        mrows = "".join(f"<div class='m'>{escape(m.name)}: <b>{m.value}{escape(m.unit)}</b> "
                         f"{_sparkline(series.get(s.machine, {}).get(m.name, []))}</div>" for m in s.metrics)
-        frows = "".join(f"<li style='color:{_SEV[f.severity]}'>[{f.severity}] {f.message}</li>" for f in mf) or "<li>OK</li>"
-        cards.append(f"<section class='card'><h2><span class='dot' style='background:{dot}'></span>{s.machine}"
-                     f" <small>{s.os}</small></h2>{mrows}<ul>{frows}</ul>"
-                     f"<pre class='rec'>{recs.get(s.machine,'')}</pre></section>")
+        frows = "".join(f"<li style='color:{_SEV.get(f.severity, '#888')}'>"
+                        f"[{escape(f.severity)}] {escape(f.message)}</li>" for f in mf) or "<li>OK</li>"
+        cards.append(f"<section class='card'><h2><span class='dot' style='background:{dot}'></span>{escape(s.machine)}"
+                     f" <small>{escape(s.os)}</small></h2>{mrows}<ul>{frows}</ul>"
+                     f"<pre class='rec'>{escape(recs.get(s.machine,''))}</pre></section>")
     issues = len(flags)
     return ("<!doctype html><html><head><meta charset='utf-8'><title>local_watch</title><style>"
             "body{font:14px system-ui;margin:1.5rem;background:#0e0b1f;color:#eee}"
