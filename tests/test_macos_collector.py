@@ -3,7 +3,7 @@ from local_watch.collectors import macos
 
 FX = Path(__file__).parent.parent / "fixtures"
 
-def fake_runner(cmd):
+def fake_runner(cmd, timeout=None):
     key = " ".join(cmd)
     table = {
         "df -P": "macos_df.txt",

@@ -3,7 +3,7 @@ from local_watch.collectors import linux
 
 FX = Path(__file__).parent.parent / "fixtures"
 
-def fake_runner(cmd):
+def fake_runner(cmd, timeout=None):
     key = " ".join(cmd)
     table = {
         "df -P": "linux_df.txt", "free -b": "linux_free.txt", "uptime": "linux_uptime.txt",

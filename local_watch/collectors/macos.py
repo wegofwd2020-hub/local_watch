@@ -1,6 +1,6 @@
 from __future__ import annotations
 from local_watch.schema import Metric, Snapshot
-from local_watch.collectors.base import probe
+from local_watch.collectors.base import probe, SLOW_PROBE_TIMEOUT
 
 def _disk_root_pct(df_out: str) -> float | None:
     # macOS `df -P` uses the same POSIX columns as Linux (Filesystem, blocks,
@@ -71,9 +71,9 @@ def collect(runner=probe, machine: str = "", now: str = "") -> Snapshot:
     metrics: list[Metric] = []
     facts: dict[str, str] = {}
 
-    def read(name: str, cmd: list[str]) -> str | None:
+    def read(name: str, cmd: list[str], timeout: int | None = None) -> str | None:
         """Run one probe; record it as failed if it could not run."""
-        out = runner(cmd)
+        out = runner(cmd, timeout=timeout)
         if out is None:
             failed.append(name)
         return out
@@ -91,7 +91,7 @@ def collect(runner=probe, machine: str = "", now: str = "") -> Snapshot:
 
     df = read("df", ["df", "-P"])
     vm_stat = read("vm_stat", ["vm_stat"])
-    swupdate = read("softwareupdate", ["softwareupdate", "--list"])
+    swupdate = read("softwareupdate", ["softwareupdate", "--list"], timeout=SLOW_PROBE_TIMEOUT)
     launchctl = read("launchctl", ["launchctl", "list"])
 
     metric("disk_root_pct", "df", df, _disk_root_pct)
