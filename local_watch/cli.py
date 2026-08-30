@@ -35,10 +35,13 @@ def main(argv=None) -> int:
         snaps = [st.latest(m) for m in st.machines()]
         flags = []
         series = {}
+        # One clock for the whole render, so every machine is judged
+        # stale-or-fresh against the same instant.
+        now = _now()
         for s in snaps:
             ser = {m.name: st.series(s.machine, m.name, 20) for m in s.metrics}
             series[s.machine] = ser
-            flags += rules.evaluate(s, ser)
+            flags += rules.evaluate(s, ser, now=now)
         recs = agent.recommend(snaps, flags)
         open(a.html, "w").write(report.render_dashboard(snaps, flags, recs, series))
         open(a.md, "w").write(report.render_markdown(snaps, flags, recs))
