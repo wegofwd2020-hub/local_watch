@@ -149,8 +149,10 @@ the personal fleet. All deferred to v2+.
 
 ## Security & privacy
 Read-only by construction. Metrics are non-sensitive system statistics and never leave your
-machines/tailnet. No credentials are collected; the LLM key is a local BYOK file. Private
-repo.
+machines/tailnet. No credentials are collected; the LLM key is a local BYOK file. The source
+repository is public, but it holds only code — no collected metrics, reports or keys are ever
+committed to it (they stay on your machines under `~/.local/share/local_watch/`, and
+`.gitignore` excludes keys and local config).
 
 ## Getting started
 _TBD once implemented._ Build proceeds from the design spec
