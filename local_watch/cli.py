@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, platform, datetime
+import argparse, platform, datetime, os, sys, tempfile
 from local_watch.schema import Snapshot
 from local_watch.store import Store
 from local_watch import rules, agent, report
@@ -19,6 +19,31 @@ def _collect(machine: str) -> Snapshot:
         from local_watch.collectors import linux as c
     return c.collect(machine=machine or platform.node(), now=_now())
 
+def _write_atomic(path: str, data: str) -> None:
+    """Write `data` to `path` atomically via a same-directory temp file plus
+    os.replace, so a concurrent reader sees either the old complete file or
+    the new one — never the truncated-then-half-written middle.
+
+    collect and sync both carry RunAtLoad=true, so at every login/reboot they
+    fire at once; a plain open(path, "w") truncates in place, and the sync
+    rsync can grab the spool file inside that window and ship a 0-byte
+    snapshot to the aggregator. os.replace is atomic on the same filesystem,
+    which the temp file is guaranteed to share by living in the same dir."""
+    d = os.path.dirname(path) or "."
+    fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-", suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="local_watch")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -29,11 +54,22 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
 
     if a.cmd == "collect":
-        open(a.out, "w").write(_collect(a.machine).to_json()); return 0
+        _write_atomic(a.out, _collect(a.machine).to_json()); return 0
     if a.cmd == "ingest":
         st = Store(a.store)
         for fp in a.files:
-            st.append(Snapshot.from_json(open(fp).read()))
+            try:
+                snap = Snapshot.from_json(open(fp).read())
+            except (OSError, ValueError, KeyError, TypeError) as e:
+                # A truncated or empty snapshot — e.g. a sync that raced a
+                # non-atomic collect write — must not abort ingest of the whole
+                # fleet: mambakkam-ingest-render.sh passes every machine's file
+                # in one call, so one bad file would otherwise sink the entire
+                # render. Skip it loudly; the machine's staleness rule reports
+                # the gap if no good snapshot ever lands.
+                print(f"local_watch ingest: skipping {fp}: {e}", file=sys.stderr)
+                continue
+            st.append(snap)
         return 0
     if a.cmd == "render":
         st = Store(a.store)
