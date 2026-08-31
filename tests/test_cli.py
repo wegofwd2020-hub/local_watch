@@ -1,8 +1,52 @@
-import json, sys
+import json, sys, os
 from pathlib import Path
 from local_watch.schema import Metric, Snapshot
 from local_watch import cli
 import local_watch.agent as agent
+
+
+def test_collect_writes_atomically(tmp_path, monkeypatch):
+    # collect and sync both fire on RunAtLoad at login; a non-atomic write
+    # leaves a truncate-then-write window in which the sync rsync can grab a
+    # 0-byte spool file and ship it to the aggregator. Assert the write goes
+    # through a same-dir temp + rename, so a concurrent reader never sees the
+    # destination truncated. We capture the path handed to os.replace.
+    monkeypatch.setattr(cli, "_collect",
+                        lambda m: Snapshot("box", "linux", "2026-08-30T00:00:00Z",
+                                           [Metric("disk_root_pct", 42.0, "%")], {}))
+    out = tmp_path / "box.json"
+    seen = {}
+    real_replace = os.replace
+    def spy(src, dst):
+        # At the moment of replace, src is a complete separate file and the
+        # destination does not yet exist as a half-written file.
+        seen["src_complete"] = json.loads(Path(src).read_text())["machine"] == "box"
+        seen["src_not_dst"] = src != str(out)
+        real_replace(src, dst)
+    monkeypatch.setattr(cli.os, "replace", spy)
+    assert cli.main(["collect", "--machine", "box", "--out", str(out)]) == 0
+    assert seen == {"src_complete": True, "src_not_dst": True}
+    assert json.loads(out.read_text())["machine"] == "box"
+    # no temp files left behind in the spool dir
+    assert [p.name for p in tmp_path.iterdir()] == ["box.json"]
+
+
+def test_ingest_skips_empty_and_malformed_files(tmp_path, monkeypatch, capsys):
+    # One truncated file (the race this whole fix is about) must not abort
+    # ingest of the rest of the fleet, since every machine's snapshot is
+    # ingested in a single call on the aggregator.
+    good = tmp_path / "good.json"
+    good.write_text(Snapshot("box", "linux", "2026-08-30T00:00:00Z",
+                             [Metric("disk_root_pct", 55.0, "%")], {}).to_json())
+    empty = tmp_path / "empty.json"; empty.write_text("")            # the 0-byte race
+    partial = tmp_path / "partial.json"; partial.write_text('{"machine": "box"')  # cut off
+    db = tmp_path / "m.sqlite"
+    rc = cli.main(["ingest", "--store", str(db), str(empty), str(good), str(partial)])
+    assert rc == 0
+    from local_watch.store import Store
+    assert Store(str(db)).machines() == ["box"]                       # the good one landed
+    err = capsys.readouterr().err
+    assert "skipping" in err and "empty.json" in err and "partial.json" in err
 
 def test_ingest_then_render(tmp_path, monkeypatch):
     snapf = tmp_path / "s.json"
