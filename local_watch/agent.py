@@ -28,7 +28,13 @@ def _default_provider():
     from wegofwd_llm.registry import build_provider
     from wegofwd_llm.contract import LLMRequest
     key = open(os.path.expanduser("~/.config/wegofwd/anthropic_api_key")).read().strip()
-    real = build_provider("anthropic", api_key=key, model="claude-sonnet-5")
+    # Pinned to 4-6 deliberately. wegofwd-llm 0.2.0's generate() always sends
+    # `temperature`, and the current-generation models (claude-sonnet-5,
+    # claude-opus-5) reject it: 400 invalid_request_error, "`temperature` is
+    # deprecated for this model". Passing temperature=None does not help — the
+    # SDK serialises it as null, which is also rejected. Moving to a newer
+    # model requires wegofwd-llm to stop sending temperature unconditionally.
+    real = build_provider("anthropic", api_key=key, model="claude-sonnet-4-6")
 
     class _Adapter:
         def complete(self, prompt: str) -> str:
