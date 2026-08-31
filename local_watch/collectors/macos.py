@@ -49,6 +49,13 @@ def _failed_agents(launchctl_out: str) -> str:
     `launchctl list` prints "PID<tab>Status<tab>Label"; Status is the agent's
     last exit code, so a non-zero value (negative = killed by a signal) means
     it exited badly. Read-only: listing never loads or unloads anything.
+
+    Apple's own daemons crash and get relaunched by launchd as a matter of
+    course — e.g. `com.apple.BiomeAgent` segfaults with status -11 every few
+    minutes — so a signal-killed `com.apple.*` agent is respawn noise, not an
+    actionable fleet failure, and v1 only reports what the operator can act on.
+    A *non*-Apple agent killed by a signal, or an Apple agent that exited with
+    a positive code (a clean non-zero exit, not a crash), is still surfaced.
     """
     failed = []
     for ln in launchctl_out.splitlines():
@@ -59,8 +66,12 @@ def _failed_agents(launchctl_out: str) -> str:
             status = int(parts[1])
         except ValueError:
             continue                                   # "-" or malformed
-        if status != 0:
-            failed.append(parts[2])
+        if status == 0:
+            continue
+        label = parts[2]
+        if label.startswith("com.apple.") and status < 0:
+            continue                                   # crash/respawn noise
+        failed.append(label)
     return ",".join(failed)
 
 def _updates_pending(swupdate_out: str) -> int:
