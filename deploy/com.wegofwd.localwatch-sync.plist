@@ -37,19 +37,10 @@
           fi
           . "$HOME/.config/local_watch/env"
           : "${LOCAL_WATCH_DATA:=$HOME/.local/share/local_watch}"
+          mkdir -p "$LOCAL_WATCH_DATA"
           exec &gt;&gt;"$LOCAL_WATCH_DATA/sync.log" 2&gt;&amp;1
           echo "--- sync $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          if [ -z "$LOCAL_WATCH_REMOTE" ]; then
-            echo "LOCAL_WATCH_REMOTE is unset; nothing to sync to" &gt;&amp;2
-            exit 1
-          fi
-          snap="$LOCAL_WATCH_DATA/spool/$(hostname -s).json"
-          if [ ! -f "$snap" ]; then
-            echo "no snapshot at $snap yet; nothing to push" &gt;&amp;2
-            exit 0
-          fi
-          exec rsync -az --rsh=ssh "$snap" \
-            "$LOCAL_WATCH_REMOTE:.local/share/local_watch/ingest/"
+          exec "$LOCAL_WATCH_HOME/deploy/sync-to-aggregator.sh"
         </string>
     </array>
 
