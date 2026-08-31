@@ -98,7 +98,8 @@ def test_render_draws_a_sparkline_from_multiple_snapshots(tmp_path, monkeypatch)
     db = tmp_path / "m.sqlite"
     html = tmp_path / "d.html"
     md = tmp_path / "r.md"
-    for i, (ts, disk) in enumerate([("2026-08-30T10:00:00Z", 80.0), ("2026-08-30T11:00:00Z", 81.0)]):
+    for i, (ts, disk) in enumerate([("2026-08-30T10:00:00Z", 80.0), ("2026-08-30T11:00:00Z", 81.0),
+                                    ("2026-08-30T12:00:00Z", 82.5)]):
         f = tmp_path / f"s{i}.json"
         f.write_text(Snapshot("box", "linux", ts, [Metric("disk_root_pct", disk, "%")],
                               {"probes_failed": ""}).to_json())
@@ -128,3 +129,16 @@ def test_render_reads_enough_history_to_project_a_filling_disk(tmp_path, monkeyp
                            {"probes_failed": ""}))
     cli.main(["render", "--store", str(db), "--html", str(html), "--md", str(md)])
     assert "filling" in md.read_text()
+
+
+def test_render_passes_the_clock_through_so_cards_show_reading_age(tmp_path, monkeypatch):
+    # render_dashboard takes `now` optionally; if the CLI does not hand it over,
+    # freshness silently disappears from the real dashboard.
+    monkeypatch.setattr(agent, "_default_provider", lambda: None)
+    db = tmp_path / "m.sqlite"
+    html = tmp_path / "d.html"
+    md = tmp_path / "r.md"
+    snapf = _write_snap(tmp_path / "s.json", cli._now())
+    cli.main(["ingest", "--store", str(db), str(snapf)])
+    cli.main(["render", "--store", str(db), "--html", str(html), "--md", str(md)])
+    assert "ago" in html.read_text()

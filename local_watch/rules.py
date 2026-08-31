@@ -8,6 +8,11 @@ from local_watch.schema import Snapshot
 # case its last snapshot is history, not status.
 STALE_AFTER_MIN = 60
 
+# The disk levels the meter in report.py marks. Named here so the picture and
+# the rule that colours it cannot drift apart.
+DISK_WARN_PCT = 80
+DISK_CRIT_PCT = 90
+
 _TS_FMT = "%Y-%m-%dT%H:%M:%SZ"
 
 # Trend projection guards. A rate is only worth extrapolating if it is backed
@@ -39,7 +44,7 @@ def _parse_ts(ts: str) -> datetime.datetime | None:
     except (ValueError, TypeError):
         return None
 
-def _age_label(minutes: int) -> str:
+def age_label(minutes: int) -> str:
     if minutes < 60:
         return f"{minutes}m"
     if minutes < 60 * 24:
@@ -118,7 +123,7 @@ def _staleness(latest: Snapshot, now: str) -> Flag | None:
     if minutes < STALE_AFTER_MIN:
         return None
     return Flag(latest.machine, "stale", "crit",
-                f"No snapshot for {_age_label(minutes)} — readings below are stale")
+                f"No snapshot for {age_label(minutes)} — readings below are stale")
 
 def evaluate(latest: Snapshot, series: dict[str, list[tuple[str, float]]],
              now: str | None = None) -> list[Flag]:
@@ -138,9 +143,9 @@ def evaluate(latest: Snapshot, series: dict[str, list[tuple[str, float]]],
 
     disk = _metric(latest, "disk_root_pct")
     if disk is not None:
-        if disk >= 90:
+        if disk >= DISK_CRIT_PCT:
             f.append(Flag(mc, "disk_full", "crit", f"Root filesystem {disk:.0f}% full"))
-        elif disk >= 80:
+        elif disk >= DISK_WARN_PCT:
             f.append(Flag(mc, "disk_full", "warn", f"Root filesystem {disk:.0f}% full"))
     # Memory is deliberately left out of trend projection: it sawtooths by
     # design (caches grow until something needs the pages), so a rising fit
