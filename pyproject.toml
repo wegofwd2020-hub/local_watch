@@ -10,7 +10,12 @@ build-backend = "setuptools.build_meta"
 name = "local_watch"
 version = "0.0.1"
 requires-python = ">=3.11"
-dependencies = ["wegofwd-llm @ git+https://github.com/wegofwd2020-hub/wegofwd-llm@v0.2.0"]
+# The [anthropic] extra is required, not optional: agent._default_provider()
+# builds an "anthropic" provider, and without the extra wegofwd-llm raises
+# LLMConfigurationError("anthropic SDK not installed"). recommend() catches
+# that and falls back to rules-only text, so the failure is silent apart from
+# the FALLBACK_NOTICE in the report.
+dependencies = ["wegofwd-llm[anthropic] @ git+https://github.com/wegofwd2020-hub/wegofwd-llm@v0.2.0"]
 
 # Every deploy unit, the launchd plist and deploy/mambakkam-ingest-render.sh
 # invoke `.venv/bin/local_watch`, which exists only because of this entry.
