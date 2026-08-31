@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 guards the requires-python floor in pyproject.toml; 3.13 is what
+        # the project is developed against locally.
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # The sole runtime dependency (wegofwd-llm) is a git+https install from
+      # another repo in this org. Rewrite github.com fetches through the job's
+      # GITHUB_TOKEN so the clone works whether that repo is public or private.
+      # Harmless for a public dependency; required if it is ever made private.
+      - name: Authenticate git for org dependencies
+        run: git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Test
+        run: pytest -q
