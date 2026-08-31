@@ -84,7 +84,7 @@ def main(argv=None) -> int:
             series[s.machine] = ser
             flags += rules.evaluate(s, ser, now=now)
         recs = agent.recommend(snaps, flags)
-        open(a.html, "w").write(report.render_dashboard(snaps, flags, recs, series))
+        open(a.html, "w").write(report.render_dashboard(snaps, flags, recs, series, now=now))
         open(a.md, "w").write(report.render_markdown(snaps, flags, recs))
         return 0
     return 1
