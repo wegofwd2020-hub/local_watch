@@ -75,8 +75,10 @@ Now edit `~/.config/local_watch/env`:
   directory containing `.venv/`). Run `pwd` to get it.
 - `LOCAL_WATCH_DATA` — leave as `/home/YOU/.local/share/local_watch` unless
   you have a reason. The dashboard path under it is what wegofwd-hub serves.
-- `LOCAL_WATCH_REMOTE` — **Collectors only**: `user@aggregator-magicdns-name`.
-  On the Aggregator, leave it blank.
+- `LOCAL_WATCH_REMOTE` — ships **commented out**. On a **Collector**,
+  uncomment it and set `user@aggregator-magicdns-name`. On the **Aggregator**,
+  leave it commented: it is the destination, and pointing it at its own
+  hostname makes it try to rsync to itself.
 
 systemd does not expand `~` or `$HOME` in this file. **Use absolute paths.**
 
@@ -275,6 +277,20 @@ held by another process.
 flags are still correct; only the plain-language advice is missing. The agent
 reads `~/.config/wegofwd/anthropic_api_key` and needs `wegofwd-llm` installed,
 which `pip install -e .` pulls in when it has network access.
+
+**Sync fails with `LOCAL_WATCH_REMOTE points at this machine`** — this box is
+the aggregator but was set up with step 5A. Remove the sync units, comment out
+`LOCAL_WATCH_REMOTE`, and do step 5B instead:
+
+```bash
+systemctl --user disable --now local_watch-sync.timer
+rm -f ~/.config/systemd/user/local_watch-sync.*
+systemctl --user daemon-reload
+```
+
+**Sync fails with an ssh `Permission denied` or `Too many authentication
+failures`** — the aggregator is genuinely refusing this box. Re-run the
+`ssh "$LOCAL_WATCH_REMOTE" true` check from Step 5A.
 
 **A unit fails with "No such file or directory"** — almost always
 `LOCAL_WATCH_HOME` pointing at a directory with no built `.venv`. Re-run

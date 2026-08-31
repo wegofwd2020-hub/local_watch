@@ -21,16 +21,8 @@ After=network-online.target
 Type=oneshot
 EnvironmentFile=%h/.config/local_watch/env
 
-# Skip quietly if collect has not produced a snapshot yet (first boot, or a
-# collect that failed). Sending nothing is correct: the aggregator's staleness
-# rule will notice the gap on its own, which is the honest signal.
-ExecStart=/bin/sh -c '\
-  snap="$LOCAL_WATCH_DATA/spool/$(hostname -s).json"; \
-  if [ ! -f "$snap" ]; then \
-    echo "local_watch-sync: no snapshot at $snap yet; nothing to push" >&2; \
-    exit 0; \
-  fi; \
-  exec rsync -az --rsh=ssh "$snap" \
-    "$LOCAL_WATCH_REMOTE:.local/share/local_watch/ingest/"'
+# All guards (remote unset, remote pointing at this machine, no snapshot yet)
+# live in the script so Linux and macOS behave identically.
+ExecStart=/bin/sh -c 'exec "$LOCAL_WATCH_HOME/deploy/sync-to-aggregator.sh"'
 
 NoNewPrivileges=true

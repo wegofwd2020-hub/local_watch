@@ -31,10 +31,11 @@ every snapshot into a SQLite history and re-renders the dashboard.
 | `env.example` | all | Copied to `~/.config/local_watch/env`; the single place paths are configured |
 | `local_watch-collect.{service,timer}` | Linux, all | Take one read-only snapshot every 20 min |
 | `local_watch-sync.{service,timer}` | Linux collectors | rsync that snapshot to the aggregator |
+| `sync-to-aggregator.sh` | collectors, both OSes | The sync body and its guards, shared by the Linux unit and the Mac agent |
 | `local_watch-ingest-render.{service,timer}` | `mambakkam` | Merge all snapshots and re-render |
 | `mambakkam-ingest-render.sh` | `mambakkam` | The two-command body of the above, with guards |
 | `com.wegofwd.localwatch.plist` | Mac | Collect, every 20 min |
-| `com.wegofwd.localwatch-sync.plist` | Mac | rsync to the aggregator, every 20 min |
+| `com.wegofwd.localwatch-sync.plist` | Mac | Runs `sync-to-aggregator.sh`, every 20 min |
 
 Both plists and all four units read `~/.config/local_watch/env` at runtime, so
 **none of them need editing** — the checkout path is configured once per

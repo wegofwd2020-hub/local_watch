@@ -72,8 +72,9 @@ Edit `~/.config/local_watch/env`:
   On macOS this will start `/Users/`, not `/home/`, so the example value
   **must** be changed.
 - `LOCAL_WATCH_DATA` — `/Users/YOU/.local/share/local_watch`.
-- `LOCAL_WATCH_REMOTE` — `user@mambakkam-magicdns-name`, e.g.
-  `sivam@mambakkam.tail242406.ts.net`.
+- `LOCAL_WATCH_REMOTE` — ships **commented out**; uncomment it and set
+  `user@mambakkam-magicdns-name`, e.g. `sivam@mambakkam.tail242406.ts.net`.
+  The Mac is always a collector, so this one is always needed here.
 
 **Verify:**
 
