@@ -25,4 +25,7 @@ config.local.*
 # OS
 .DS_Store
 
+# IDE
+.idea/
+
 # internal SDD docs stay local if this ever mirrors to a public surface (it won't; private repo)
